@@ -1,11 +1,39 @@
 ---
 # tasks file for wordpress
-- name: Download WordPress  
-  get_url: 
-    url=https://wordpress.org/latest.tar.gz 
-    dest=/tmp/wordpress.tar.gz
-    validate_certs=no 
-  sudo: yes
+# Wordpress. Uses wordpress_version from top of file for version, currently 4.9.4
+- name: require wordpress_version
+  fail:
+    msg: "Require 'wordpress_version', download one from https://wordpress.org/download/release-archive/"
+  when: wordpress_version is undefined
+
+- name: check if wordpress installed
+  stat:
+    path: "/var/www/{{wp_domain}}/wp-settings.php"
+    follow: yes
+  #~ ignore_errors: true
+  register: wp_install
+
+- name: copy in wordpress to /tmp
+  copy:
+    src: "wordpress-{{wordpress_version}}.tar.gz"
+    dest: /tmp/wordpress.tgz
+  when: not (wp_install.stat.isreg is defined and wp_install.stat.isreg)
+  register: wordpress_archive
+  ignore_errors: true
+
+# If the wordpress archive isn't available for our version, just download it...
+- block:
+  - name: Download Wordpress checksum
+    uri:
+      url: "https://wordpress.org/wordpress-{{wordpress_version}}.tar.gz.sha1"
+      return_content: true
+    register: wp_checksum
+  - name: Download wordpress archive
+    get_url:
+      url: "https://wordpress.org/wordpress-{{wordpress_version}}.tar.gz"
+      dest: /tmp/wordpress.tar.tgz
+      checksum: "sha1:{{wp_checksum.content}}"
+when: wordpress_archive|failed
 
 - name: Extract WordPress  
   unarchive: 
